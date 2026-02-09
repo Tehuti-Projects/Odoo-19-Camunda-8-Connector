@@ -96,7 +96,6 @@ public class OdooApiClient implements AutoCloseable {
         return executeWithRetry(model, method, body, MAX_RETRIES);
     }
 
-    @SuppressWarnings("unchecked")
     private Object executeWithRetry(String model, String method, Map<String, Object> body, int retriesLeft)
             throws OdooApiException {
         String url = String.format("%s/%s/%s", baseUrl, model, method);
@@ -285,7 +284,6 @@ public class OdooApiClient implements AutoCloseable {
      * @param offset Number of records to skip (null = 0)
      * @return List of matching record IDs
      */
-    @SuppressWarnings("unchecked")
     public List<Integer> search(String model, List<Object> domain, Integer limit, Integer offset)
             throws OdooApiException {
         Map<String, Object> body = new LinkedHashMap<>();

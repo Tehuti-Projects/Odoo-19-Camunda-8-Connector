@@ -163,6 +163,7 @@ public class OdooOutboundFunction implements OutboundConnectorFunction {
      * Handle API exceptions and convert to appropriate BPMN errors.
      */
     private OdooResult handleApiException(OdooApiException e, OdooRequest request) {
+        @SuppressWarnings("unused")
         String errorCode;
         String operation = request.operation();
         String model = request.model();

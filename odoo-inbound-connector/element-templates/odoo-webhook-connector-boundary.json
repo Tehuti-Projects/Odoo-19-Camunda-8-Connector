@@ -1,0 +1,197 @@
+{
+    "$schema": "https://unpkg.com/@camunda/zeebe-element-templates-json-schema/resources/schema.json",
+    "name": "Odoo Webhook Boundary Event",
+    "id": "io.camunda.odoo-webhook-boundary-event",
+    "description": "Catch Odoo webhook events as interrupting boundary event on activities",
+    "version": 1,
+    "documentationRef": "https://github.com/yourusername/odoo-camunda-connector",
+    "icon": {
+        "contents": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 256 256'%3E%3Cpath fill='%237C6576' d='M128 0C57.307 0 0 57.307 0 128c0 70.7 57.3 128 128 128 70.7 0 128-57.3 128-128C256 57.3 198.7 0 128 0zm0 224c-53 0-96-43-96-96s43-96 96-96 96 43 96 96-43 96-96 96z'/%3E%3C/svg%3E"
+    },
+    "category": {
+        "id": "connectors",
+        "name": "Connectors"
+    },
+    "appliesTo": [
+        "bpmn:BoundaryEvent"
+    ],
+    "elementType": {
+        "value": "bpmn:BoundaryEvent",
+        "eventDefinition": "bpmn:MessageEventDefinition"
+    },
+    "groups": [
+        {
+            "id": "webhook",
+            "label": "Webhook Configuration"
+        },
+        {
+            "id": "filtering",
+            "label": "Event Filtering"
+        },
+        {
+            "id": "correlation",
+            "label": "Message Correlation"
+        },
+        {
+            "id": "activation",
+            "label": "Activation Condition"
+        },
+        {
+            "id": "output",
+            "label": "Output Mapping"
+        }
+    ],
+    "properties": [
+        {
+            "type": "Hidden",
+            "value": "io.camunda:odoo-inbound-webhook:1",
+            "binding": {
+                "type": "zeebe:property",
+                "name": "inbound.type"
+            }
+        },
+        {
+            "id": "secretToken",
+            "label": "Webhook Secret Token",
+            "description": "Secret token to validate requests from Odoo (X-Odoo-Webhook-Secret header)",
+            "type": "String",
+            "feel": "optional",
+            "group": "webhook",
+            "binding": {
+                "type": "zeebe:property",
+                "name": "secretToken"
+            },
+            "constraints": {
+                "notEmpty": true
+            }
+        },
+        {
+            "id": "allowedModels",
+            "label": "Allowed Models",
+            "description": "Comma-separated list of Odoo models to accept (e.g., 'res.partner,sale.order'). Leave empty for all models",
+            "type": "String",
+            "feel": "optional",
+            "optional": true,
+            "group": "filtering",
+            "binding": {
+                "type": "zeebe:property",
+                "name": "allowedModels"
+            }
+        },
+        {
+            "id": "eventType",
+            "label": "Event Type",
+            "description": "Type of Odoo event to listen for",
+            "type": "Dropdown",
+            "value": "all",
+            "group": "filtering",
+            "choices": [
+                {
+                    "name": "All Events",
+                    "value": "all"
+                },
+                {
+                    "name": "Create Only",
+                    "value": "create"
+                },
+                {
+                    "name": "Update Only",
+                    "value": "write"
+                },
+                {
+                    "name": "Delete Only",
+                    "value": "unlink"
+                },
+                {
+                    "name": "Create or Update",
+                    "value": "create_write"
+                }
+            ],
+            "binding": {
+                "type": "zeebe:property",
+                "name": "eventType"
+            }
+        },
+        {
+            "id": "messageName",
+            "label": "Message Name",
+            "description": "Name of the message to correlate (e.g., 'OdooPartnerDeleted')",
+            "type": "String",
+            "feel": "optional",
+            "group": "correlation",
+            "binding": {
+                "type": "bpmn:Message#property",
+                "name": "name"
+            },
+            "constraints": {
+                "notEmpty": true
+            }
+        },
+        {
+            "id": "correlationKeyExpression",
+            "label": "Correlation Key (Process)",
+            "description": "FEEL expression to match with process variable (e.g., =partnerId)",
+            "type": "String",
+            "feel": "required",
+            "group": "correlation",
+            "binding": {
+                "type": "bpmn:Message#zeebe:subscription#property",
+                "name": "correlationKey"
+            },
+            "constraints": {
+                "notEmpty": true
+            }
+        },
+        {
+            "id": "messageIdExpression",
+            "label": "Message ID Expression",
+            "description": "FEEL expression for unique message ID to prevent duplicates (e.g., odooRecordId)",
+            "type": "String",
+            "feel": "required",
+            "optional": true,
+            "group": "correlation",
+            "binding": {
+                "type": "zeebe:property",
+                "name": "messageIdExpression"
+            }
+        },
+        {
+            "id": "activationCondition",
+            "label": "Activation Condition",
+            "description": "FEEL expression to determine if the event should activate this connector",
+            "type": "Text",
+            "feel": "required",
+            "optional": true,
+            "group": "activation",
+            "binding": {
+                "type": "zeebe:property",
+                "name": "activationCondition"
+            }
+        },
+        {
+            "id": "resultVariable",
+            "label": "Result Variable",
+            "description": "Name of variable to store the webhook event data",
+            "type": "String",
+            "value": "odooEvent",
+            "group": "output",
+            "binding": {
+                "type": "zeebe:property",
+                "name": "resultVariable"
+            }
+        },
+        {
+            "id": "resultExpression",
+            "label": "Result Expression",
+            "description": "FEEL expression to transform the webhook payload before storing",
+            "type": "Text",
+            "feel": "required",
+            "optional": true,
+            "group": "output",
+            "binding": {
+                "type": "zeebe:property",
+                "name": "resultExpression"
+            }
+        }
+    ]
+}

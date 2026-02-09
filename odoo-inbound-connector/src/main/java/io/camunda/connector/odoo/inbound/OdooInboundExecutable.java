@@ -27,6 +27,7 @@ import java.util.concurrent.TimeUnit;
  * The connector correlates events to waiting process instances based on
  * configuration.
  */
+@SuppressWarnings("unused")
 @InboundConnector(name = "Odoo Inbound Webhook", type = "io.camunda:odoo-inbound-webhook:1")
 public class OdooInboundExecutable implements InboundConnectorExecutable<InboundConnectorContext> {
 
