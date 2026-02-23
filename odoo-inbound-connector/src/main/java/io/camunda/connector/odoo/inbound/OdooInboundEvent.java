@@ -3,6 +3,7 @@ package io.camunda.connector.odoo.inbound;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Event data received from Odoo webhook.
@@ -36,7 +37,7 @@ public record OdooInboundEvent(
         /** The full raw webhook payload for custom processing */
         Map<String, Object> rawPayload) {
     /**
-     * Create an event from a webhook payload.
+     * Create an event from a webhook payload with improved null safety.
      */
     @SuppressWarnings("unchecked")
     public static OdooInboundEvent fromPayload(Map<String, Object> payload) {
@@ -55,9 +56,12 @@ public record OdooInboundEvent(
             recordIds = List.of();
         }
 
-        Integer userId = payload.get("user_id") != null
-                ? ((Number) payload.get("user_id")).intValue()
-                : null;
+        // Safe extraction using Optional
+        Integer userId = Optional.ofNullable(payload.get("user_id"))
+                .filter(Number.class::isInstance)
+                .map(Number.class::cast)
+                .map(Number::intValue)
+                .orElse(null);
 
         String database = (String) payload.get("database");
 

@@ -42,7 +42,10 @@ public class OdooApiClient implements AutoCloseable {
     private static final int CONNECT_TIMEOUT_SECONDS = 30;
     private static final int REQUEST_TIMEOUT_SECONDS = 60;
     private static final int MAX_RETRIES = 3;
-    private static final long RETRY_DELAY_MS = 1000;
+
+    // Exponential backoff configuration
+    private static final long INITIAL_RETRY_DELAY_MS = 500;
+    private static final long MAX_RETRY_DELAY_MS = 8000;
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -88,15 +91,19 @@ public class OdooApiClient implements AutoCloseable {
      * @param model  The model name (e.g., "res.partner")
      * @param method The method name (e.g., "search", "read", "create")
      * @param body   The request body parameters
-     * @return The response from Odoo (type depends on the method)
-     * @throws OdooApiException If the request fails
+     * @return The response from Odoo (type depends on the method) * @throws
+     *         OdooApiException If the request fails
      */
     public Object execute(String model, String method, Map<String, Object> body)
             throws OdooApiException {
-        return executeWithRetry(model, method, body, MAX_RETRIES);
+        return executeWithRetry(model, method, body, MAX_RETRIES, INITIAL_RETRY_DELAY_MS);
     }
 
-    private Object executeWithRetry(String model, String method, Map<String, Object> body, int retriesLeft)
+    /**
+     * Execute with retry logic, exponential backoff, and jitter.
+     */
+    private Object executeWithRetry(String model, String method, Map<String, Object> body,
+            int retriesLeft, long currentDelay)
             throws OdooApiException {
         String url = String.format("%s/%s/%s", baseUrl, model, method);
 
@@ -133,11 +140,17 @@ public class OdooApiClient implements AutoCloseable {
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 OdooError error = parseErrorResponse(responseBody, response.statusCode());
 
-                // Retry on transient errors
+                // Only retry transient errors, not authentication or permission errors
                 if (isRetryableError(response.statusCode()) && retriesLeft > 0) {
-                    LOG.warn("Retrying after transient error ({}): {}", response.statusCode(), error.message());
-                    sleep(RETRY_DELAY_MS);
-                    return executeWithRetry(model, method, body, retriesLeft - 1);
+                    long jitter = (long) (Math.random() * (currentDelay / 4));
+                    long delayWithJitter = currentDelay + jitter;
+
+                    LOG.warn("Retrying after {}ms (retriesLeft={}) due to transient error: {}",
+                            delayWithJitter, retriesLeft, error.message());
+
+                    sleep(delayWithJitter);
+                    long nextDelay = Math.min(currentDelay * 2, MAX_RETRY_DELAY_MS);
+                    return executeWithRetry(model, method, body, retriesLeft - 1, nextDelay);
                 }
 
                 throw new OdooApiException(error);
@@ -149,11 +162,17 @@ public class OdooApiClient implements AutoCloseable {
         } catch (JsonProcessingException e) {
             throw new OdooApiException("Failed to serialize/deserialize JSON: " + e.getMessage(), e);
         } catch (IOException e) {
-            // Retry on network errors
+            // Retry on network errors (connection timeout, etc.)
             if (retriesLeft > 0) {
-                LOG.warn("Retrying after network error: {}", e.getMessage());
-                sleep(RETRY_DELAY_MS);
-                return executeWithRetry(model, method, body, retriesLeft - 1);
+                long jitter = (long) (Math.random() * (currentDelay / 4));
+                long delayWithJitter = currentDelay + jitter;
+
+                LOG.warn("Retrying after {}ms (retriesLeft={}) due to network error: {}",
+                        delayWithJitter, retriesLeft, e.getMessage());
+
+                sleep(delayWithJitter);
+                long nextDelay = Math.min(currentDelay * 2, MAX_RETRY_DELAY_MS);
+                return executeWithRetry(model, method, body, retriesLeft - 1, nextDelay);
             }
             throw new OdooApiException("Network error: " + e.getMessage(), e);
         } catch (InterruptedException e) {

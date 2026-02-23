@@ -163,30 +163,44 @@ public class OdooOutboundFunction implements OutboundConnectorFunction {
      * Handle API exceptions and convert to appropriate BPMN errors.
      */
     private OdooResult handleApiException(OdooApiException e, OdooRequest request) {
-        @SuppressWarnings("unused")
-        String errorCode;
+        String errorCode = determineErrorCode(e);
         String operation = request.operation();
         String model = request.model();
 
-        if (e.isAuthenticationError()) {
-            errorCode = ERROR_AUTHENTICATION;
-        } else if (e.isPermissionError()) {
-            errorCode = ERROR_PERMISSION;
-        } else if (e.isNotFoundError()) {
-            errorCode = ERROR_NOT_FOUND;
-        } else if (e.isValidationError()) {
-            errorCode = ERROR_VALIDATION;
-        } else if (e.getMessage() != null && e.getMessage().startsWith("Network error")) {
-            errorCode = ERROR_CONNECTION;
-        } else {
-            errorCode = ERROR_UNKNOWN;
-        }
-
         OdooApiClient.OdooError error = e.getError();
         if (error != null) {
-            return OdooResult.error(operation, model, e.getMessage(), error.name(), error.statusCode());
+            LOG.error("Odoo API error: {} - {} (errorCode: {})", error.name(), error.message(), errorCode);
+            return OdooResult.error(
+                    operation,
+                    model,
+                    error.message() + " [" + errorCode + "]",
+                    error.name(),
+                    error.statusCode());
         }
 
-        return OdooResult.error(operation, model, e.getMessage());
+        LOG.error("Odoo error: {} (errorCode: {})", e.getMessage(), errorCode);
+        return OdooResult.error(operation, model, e.getMessage() + " [" + errorCode + "]");
+    }
+
+    /**
+     * Determine appropriate BPMN error code from exception.
+     */
+    private String determineErrorCode(OdooApiException e) {
+        if (e.isAuthenticationError()) {
+            return ERROR_AUTHENTICATION;
+        }
+        if (e.isPermissionError()) {
+            return ERROR_PERMISSION;
+        }
+        if (e.isNotFoundError()) {
+            return ERROR_NOT_FOUND;
+        }
+        if (e.isValidationError()) {
+            return ERROR_VALIDATION;
+        }
+        if (e.getMessage() != null && e.getMessage().startsWith("Network error")) {
+            return ERROR_CONNECTION;
+        }
+        return ERROR_UNKNOWN;
     }
 }

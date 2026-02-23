@@ -1,5 +1,7 @@
 package io.camunda.connector.odoo.inbound;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.camunda.connector.api.annotation.InboundConnector;
 import io.camunda.connector.api.inbound.CorrelationFailureHandlingStrategy;
 import io.camunda.connector.api.inbound.CorrelationRequest;
@@ -9,6 +11,9 @@ import io.camunda.connector.api.inbound.InboundConnectorExecutable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -17,15 +22,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Camunda Inbound Connector for Odoo 19 Events.
+ * Camunda Inbound Connector for Odoo 19 Webhook Events.
  * 
- * This connector provides two modes of operation:
- * 1. WEBHOOK mode - Receives HTTP webhook calls from Odoo (requires external
- * webhook setup)
- * 2. POLLING mode - Periodically checks Odoo for new/updated records
- * 
- * The connector correlates events to waiting process instances based on
- * configuration.
+ * Receives HTTP webhook calls from Odoo with security features:
+ * - Constant-time secret token validation (timing attack resistant)
+ * - Webhook replay protection
+ * - Event filtering by model and operation type
  */
 @SuppressWarnings("unused")
 @InboundConnector(name = "Odoo Inbound Webhook", type = "io.camunda:odoo-inbound-webhook:1")
@@ -33,10 +35,20 @@ public class OdooInboundExecutable implements InboundConnectorExecutable<Inbound
 
     private static final Logger LOG = LoggerFactory.getLogger(OdooInboundExecutable.class);
 
+    // Webhook replay protection settings
+    private static final Duration WEBHOOK_MAX_AGE = Duration.ofMinutes(5);
+    private static final int MAX_WEBHOOK_CACHE = 10_000;
+
     private InboundConnectorContext context;
     private OdooWebhookProperties properties;
     private ScheduledExecutorService scheduler;
     private volatile boolean active = false;
+
+    // Cache for webhook replay protection
+    private final Cache<String, Boolean> processedWebhooks = Caffeine.newBuilder()
+            .maximumSize(MAX_WEBHOOK_CACHE)
+            .expireAfterWrite(WEBHOOK_MAX_AGE)
+            .build();
 
     @Override
     public void activate(InboundConnectorContext connectorContext) throws Exception {
@@ -44,12 +56,8 @@ public class OdooInboundExecutable implements InboundConnectorExecutable<Inbound
         this.properties = connectorContext.bindProperties(OdooWebhookProperties.class);
         this.active = true;
 
-        // Start polling simulation (in production, this would integrate with Camunda's
-        // webhook infrastructure)
-        // For demonstration, we'll just mark the connector as ready
-        LOG.info("Odoo inbound connector activated. Secret: [configured], Allowed models: {}, Event type: {}",
+        LOG.info("Odoo webhook connector activated: allowedModels={}, eventType={}, replayProtection=enabled",
                 properties.allowedModels(), properties.eventType());
-        LOG.info("Connector is ready to receive webhook events at the Camunda Connectors webhook endpoint");
     }
 
     @Override
@@ -66,26 +74,26 @@ public class OdooInboundExecutable implements InboundConnectorExecutable<Inbound
                 Thread.currentThread().interrupt();
             }
         }
-        LOG.info("Odoo inbound connector deactivated");
+        processedWebhooks.invalidateAll();
+        LOG.info("Odoo webhook connector deactivated");
     }
 
     /**
      * Process an incoming Odoo webhook event.
-     * This method should be called by the Camunda webhook infrastructure when a
-     * request is received.
      * 
      * @param payload     The webhook payload from Odoo
      * @param secretToken The secret token from the X-Odoo-Webhook-Secret header
-     * @return Processing result
+     * @return Processing result with HTTP status code
      */
     public WebhookProcessingResult processWebhook(Map<String, Object> payload, String secretToken) {
         if (!active) {
             return new WebhookProcessingResult(false, "Connector not active", 503);
         }
 
-        // Validate secret token
+        // Validate secret token using constant-time comparison (timing attack
+        // resistant)
         if (properties.secretToken() != null && !properties.secretToken().isEmpty()) {
-            if (!properties.secretToken().equals(secretToken)) {
+            if (!constantTimeEquals(properties.secretToken(), secretToken)) {
                 LOG.warn("Invalid webhook secret token received");
                 return new WebhookProcessingResult(false, "Invalid secret token", 401);
             }
@@ -95,9 +103,24 @@ public class OdooInboundExecutable implements InboundConnectorExecutable<Inbound
             // Parse the event
             OdooInboundEvent event = OdooInboundEvent.fromPayload(payload);
 
+            // Webhook replay protection
+            String webhookId = generateWebhookId(event);
+            if (processedWebhooks.getIfPresent(webhookId) != null) {
+                LOG.warn("Duplicate webhook detected: model={}, recordIds={}",
+                        event.model(), event.recordIds());
+                return new WebhookProcessingResult(true, "Duplicate webhook ignored", 200);
+            }
+
+            // Validate timestamp (reject old webhooks)
+            if (event.timestamp().isBefore(Instant.now().minus(WEBHOOK_MAX_AGE))) {
+                LOG.warn("Webhook too old: timestamp={}, maxAge={}min",
+                        event.timestamp(), WEBHOOK_MAX_AGE.toMinutes());
+                return new WebhookProcessingResult(false, "Webhook expired", 400);
+            }
+
             // Validate model
             if (!properties.isModelAllowed(event.model())) {
-                LOG.debug("Ignoring event for model {} (not in allowed list)", event.model());
+                LOG.debug("Ignoring webhook for model {} (not in allowed list)", event.model());
                 return new WebhookProcessingResult(true, "Model not in allowed list", 200);
             }
 
@@ -126,6 +149,10 @@ public class OdooInboundExecutable implements InboundConnectorExecutable<Inbound
 
             // Correlate the event with waiting process instances
             CorrelationResult result = context.correlate(correlationRequest);
+
+            // Mark as processed for replay protection
+            processedWebhooks.put(webhookId, Boolean.TRUE);
+
             return handleCorrelationResult(result, event);
 
         } catch (Exception e) {
@@ -134,16 +161,41 @@ public class OdooInboundExecutable implements InboundConnectorExecutable<Inbound
         }
     }
 
+    /**
+     * Constant-time string comparison to prevent timing attacks.
+     * Uses MessageDigest.isEqual() which is guaranteed to be constant-time.
+     */
+    private boolean constantTimeEquals(String expected, String actual) {
+        if (expected == null || actual == null) {
+            return false;
+        }
+        byte[] expectedBytes = expected.getBytes(StandardCharsets.UTF_8);
+        byte[] actualBytes = actual.getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(expectedBytes, actualBytes);
+    }
+
+    /**
+     * Generate unique webhook ID for replay protection.
+     * Based on model + operation + recordIds + timestamp.
+     */
+    private String generateWebhookId(OdooInboundEvent event) {
+        return String.format("%s-%s-%s-%s",
+                event.model(),
+                event.operation(),
+                event.recordIds(),
+                event.timestamp().toEpochMilli());
+    }
+
     private WebhookProcessingResult handleCorrelationResult(CorrelationResult result, OdooInboundEvent event) {
         return switch (result) {
             case CorrelationResult.Success ignored -> {
-                LOG.info("Odoo event correlated successfully: model={}, operation={}, recordId={}",
+                LOG.info("Odoo webhook correlated successfully: model={}, operation={}, recordId={}",
                         event.model(), event.operation(), event.getRecordId());
                 yield new WebhookProcessingResult(true, "Event correlated", 200);
             }
             case CorrelationResult.Failure failure -> {
                 if (failure.handlingStrategy() instanceof CorrelationFailureHandlingStrategy.Ignore) {
-                    LOG.debug("Correlation not required, event acknowledged: {}", failure.message());
+                    LOG.debug("Correlation not required, webhook acknowledged: {}", failure.message());
                     yield new WebhookProcessingResult(true, "Event acknowledged", 200);
                 } else {
                     LOG.error("Correlation failed: {}", failure.message());
@@ -154,7 +206,7 @@ public class OdooInboundExecutable implements InboundConnectorExecutable<Inbound
     }
 
     /**
-     * Result of webhook processing
+     * Result of webhook processing.
      */
     public record WebhookProcessingResult(boolean success, String message, int statusCode) {
     }

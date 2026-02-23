@@ -1,5 +1,7 @@
 package io.camunda.connector.odoo.inbound;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.camunda.connector.api.annotation.InboundConnector;
 import io.camunda.connector.api.inbound.CorrelationFailureHandlingStrategy;
 import io.camunda.connector.api.inbound.CorrelationRequest;
@@ -9,6 +11,7 @@ import io.camunda.connector.api.inbound.InboundConnectorExecutable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -20,12 +23,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Production-grade Camunda Inbound Connector for Odoo 19.
  * Polls Odoo for new or modified records at regular intervals.
+ * 
+ * Thread-safe with memory-bounded deduplication cache.
  */
 @InboundConnector(name = "Odoo 19 Polling", type = "io.camunda:odoo-inbound-polling:1")
 public class OdooPollingExecutable implements InboundConnectorExecutable<InboundConnectorContext> {
 
     private static final Logger LOG = LoggerFactory.getLogger(OdooPollingExecutable.class);
     private static final DateTimeFormatter ODOO_DATETIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    // Memory-bounded cache to prevent OutOfMemoryError
+    private static final int MAX_CACHE_SIZE = 10_000;
+    private static final Duration CACHE_TTL = Duration.ofHours(24);
 
     private InboundConnectorContext context;
     private OdooPollingProperties properties;
@@ -34,7 +43,12 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
     private final AtomicBoolean active = new AtomicBoolean(false);
 
     private volatile Instant lastPollTime;
-    private final Set<Integer> processedIds = Collections.synchronizedSet(new HashSet<>());
+
+    // Thread-safe, memory-bounded cache for deduplication
+    private final Cache<Integer, Boolean> processedRecords = Caffeine.newBuilder()
+            .maximumSize(MAX_CACHE_SIZE)
+            .expireAfterWrite(CACHE_TTL)
+            .build();
 
     @Override
     public void activate(InboundConnectorContext connectorContext) throws Exception {
@@ -52,17 +66,21 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
 
         this.lastPollTime = Instant.now();
         this.active.set(true);
+
+        // Create scheduler with named, daemon threads and error handling
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "odoo-polling-" + properties.model());
-            t.setDaemon(true);
+            t.setDaemon(true); // Allow JVM to exit
+            t.setUncaughtExceptionHandler(
+                    (thread, ex) -> LOG.error("Uncaught exception in polling thread for {}", properties.model(), ex));
             return t;
         });
 
         int interval = properties.getEffectivePollingInterval();
         scheduler.scheduleAtFixedRate(this::poll, interval, interval, TimeUnit.SECONDS);
 
-        LOG.info("Odoo polling connector activated: model={}, interval={}s",
-                properties.model(), interval);
+        LOG.info("Odoo polling connector activated: model={}, interval={}s, cacheSize={}, cacheTTL={}h",
+                properties.model(), interval, MAX_CACHE_SIZE, CACHE_TTL.toHours());
     }
 
     @Override
@@ -73,6 +91,7 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
             scheduler.shutdown();
             try {
                 if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                    LOG.warn("Scheduler did not terminate gracefully, forcing shutdown");
                     scheduler.shutdownNow();
                 }
             } catch (InterruptedException e) {
@@ -85,13 +104,17 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
             client.close();
         }
 
-        processedIds.clear();
+        processedRecords.invalidateAll();
         LOG.info("Odoo polling connector deactivated: model={}", properties.model());
     }
 
     private void poll() {
-        if (!active.get())
+        if (!active.get()) {
             return;
+        }
+
+        long startTime = System.currentTimeMillis();
+        int processedCount = 0;
 
         try {
             List<Object> domain = buildDomain();
@@ -112,28 +135,22 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
             LOG.info("Found {} records to process for {}", records.size(), properties.model());
 
             for (Map<String, Object> record : records) {
-                if (!active.get())
+                if (!active.get()) {
                     break;
-                processRecord(record);
+                }
+                if (processRecord(record)) {
+                    processedCount++;
+                }
             }
 
             lastPollTime = Instant.now();
 
-            if (processedIds.size() > 1000) {
-                synchronized (processedIds) {
-                    Set<Integer> newSet = new HashSet<>();
-                    int count = 0;
-                    for (Integer id : processedIds) {
-                        if (count++ > 500)
-                            newSet.add(id);
-                    }
-                    processedIds.clear();
-                    processedIds.addAll(newSet);
-                }
-            }
-
         } catch (Exception e) {
-            LOG.error("Error polling Odoo for {}: {}", properties.model(), e.getMessage());
+            LOG.error("Error polling Odoo for {}: {}", properties.model(), e.getMessage(), e);
+        } finally {
+            long duration = System.currentTimeMillis() - startTime;
+            LOG.info("Polling completed: model={}, recordsFound={}, recordsProcessed={}, durationMs={}, cacheSize={}",
+                    properties.model(), processedCount, processedCount, duration, processedRecords.estimatedSize());
         }
     }
 
@@ -173,23 +190,26 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
         return fields;
     }
 
-    private void processRecord(Map<String, Object> record) {
-        Integer recordId = record.get("id") != null
-                ? ((Number) record.get("id")).intValue()
-                : null;
-
+    /**
+     * Process a single record. Returns true if processed, false if skipped.
+     */
+    private boolean processRecord(Map<String, Object> record) {
+        Integer recordId = extractRecordId(record);
         if (recordId == null) {
-            return;
+            LOG.warn("Skipping record with null ID");
+            return false;
         }
 
-        // We still keep the local cache to save unnecessary network calls
-        if (processedIds.contains(recordId)) {
-            return;
+        // Check cache for deduplication
+        if (processedRecords.getIfPresent(recordId) != null) {
+            LOG.debug("Skipping already processed record {}", recordId);
+            return false;
         }
 
         String eventType = determineEventType(record);
         if (eventType == null) {
-            return;
+            LOG.debug("Skipping record {} - event type not configured", recordId);
+            return false;
         }
 
         OdooPollingEvent event = OdooPollingEvent.fromRecord(
@@ -199,27 +219,39 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
                 properties.getEffectiveTriggerField());
 
         try {
-            // Construct a standardized, unique Message ID for deduplication
-            // Format: odoo-{model}-{id}-{eventType}
-            // Example: odoo-res.partner-123-create
+            // Construct unique message ID for deduplication
             String messageId = String.format("odoo-%s-%d-%s",
                     properties.model(),
                     recordId,
                     eventType);
 
             CorrelationRequest request = CorrelationRequest.builder()
-                    .messageId(messageId) // Critical for Deduplication
+                    .messageId(messageId)
                     .variables(event.toVariables())
                     .build();
 
             CorrelationResult result = context.correlate(request);
             handleCorrelationResult(result, event);
 
-            processedIds.add(recordId);
+            // Mark as processed
+            processedRecords.put(recordId, Boolean.TRUE);
+            return true;
 
         } catch (Exception e) {
-            LOG.error("Failed to correlate event for record {}: {}", recordId, e.getMessage());
+            LOG.error("Failed to correlate event for record {}: {}", recordId, e.getMessage(), e);
+            return false;
         }
+    }
+
+    /**
+     * Safely extract record ID with null safety.
+     */
+    private Integer extractRecordId(Map<String, Object> record) {
+        return Optional.ofNullable(record.get("id"))
+                .filter(Number.class::isInstance)
+                .map(Number.class::cast)
+                .map(Number::intValue)
+                .orElse(null);
     }
 
     private String determineEventType(Map<String, Object> record) {
@@ -243,14 +275,16 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
 
     private void handleCorrelationResult(CorrelationResult result, OdooPollingEvent event) {
         switch (result) {
-            case CorrelationResult.Success ignored -> LOG.info("Event correlated: model={}, id={}, type={}",
-                    event.model(), event.recordId(), event.eventType());
+            case CorrelationResult.Success ignored ->
+                LOG.info("Event correlated successfully: model={}, id={}, type={}",
+                        event.model(), event.recordId(), event.eventType());
             case CorrelationResult.Failure failure -> {
-                switch (failure.handlingStrategy()) {
-                    case CorrelationFailureHandlingStrategy.ForwardErrorToUpstream ignored ->
-                        LOG.error("Correlation failed: {}", failure.message());
-                    case CorrelationFailureHandlingStrategy.Ignore ignored ->
-                        LOG.debug("No waiting process for event: {}", failure.message());
+                if (failure.handlingStrategy() instanceof CorrelationFailureHandlingStrategy.ForwardErrorToUpstream) {
+                    LOG.error("Correlation failed for model={}, id={}: {}",
+                            event.model(), event.recordId(), failure.message());
+                } else {
+                    LOG.debug("No waiting process for event: model={}, id={}",
+                            event.model(), event.recordId());
                 }
             }
         }
