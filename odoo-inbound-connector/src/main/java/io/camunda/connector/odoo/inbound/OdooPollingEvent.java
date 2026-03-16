@@ -60,6 +60,8 @@ public record OdooPollingEvent(
      */
     public Map<String, Object> toVariables() {
         return Map.of(
+                "source_system", "odoo",
+                "legacy_polling_event", true,
                 "odooModel", model,
                 "odooRecordId", recordId != null ? recordId : 0,
                 "odooEventType", eventType,

@@ -1,0 +1,3 @@
+io\camunda\connector\odoo\MauBridgeClientTest.class
+io\camunda\connector\odoo\OdooRequestTest.class
+io\camunda\connector\odoo\OdooAuthenticationTest.class
