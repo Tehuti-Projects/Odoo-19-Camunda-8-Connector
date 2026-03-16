@@ -6,21 +6,21 @@ import io.camunda.connector.api.inbound.CorrelationRequest;
 import io.camunda.connector.api.inbound.CorrelationResult;
 import io.camunda.connector.api.inbound.InboundConnectorContext;
 import io.camunda.connector.api.inbound.InboundConnectorExecutable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+/**
+ * Production-grade Camunda Inbound Connector for Odoo 19.
+ * Polls Odoo for new or modified records at regular intervals.
+ */
 @InboundConnector(name = "Odoo 19 Polling", type = "io.camunda:odoo-inbound-polling:1")
 public class OdooPollingExecutable implements InboundConnectorExecutable<InboundConnectorContext> {
 
@@ -32,6 +32,7 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
     private OdooPollingClient client;
     private ScheduledExecutorService scheduler;
     private final AtomicBoolean active = new AtomicBoolean(false);
+
     private volatile Instant lastPollTime;
     private final Set<Integer> processedIds = Collections.synchronizedSet(new HashSet<>());
 
@@ -39,7 +40,6 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
     public void activate(InboundConnectorContext connectorContext) throws Exception {
         this.context = connectorContext;
         this.properties = connectorContext.bindProperties(OdooPollingProperties.class);
-        this.properties.validateForMau();
 
         this.client = new OdooPollingClient(
                 properties.url(),
@@ -53,19 +53,16 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
         this.lastPollTime = Instant.now();
         this.active.set(true);
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread thread = new Thread(r, "odoo-polling-" + properties.model());
-            thread.setDaemon(true);
-            return thread;
+            Thread t = new Thread(r, "odoo-polling-" + properties.model());
+            t.setDaemon(true);
+            return t;
         });
 
         int interval = properties.getEffectivePollingInterval();
         scheduler.scheduleAtFixedRate(this::poll, interval, interval, TimeUnit.SECONDS);
 
-        LOG.warn(
-                "connector=mautourism-odoo mode=legacy_polling compatibility_mode_enabled=true model={} reason={} interval={}s",
-                properties.model(),
-                properties.compatibilityReason(),
-                interval);
+        LOG.info("Odoo polling connector activated: model={}, interval={}s",
+                properties.model(), interval);
     }
 
     @Override
@@ -78,7 +75,7 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
                 if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
                     scheduler.shutdownNow();
                 }
-            } catch (InterruptedException exception) {
+            } catch (InterruptedException e) {
                 scheduler.shutdownNow();
                 Thread.currentThread().interrupt();
             }
@@ -89,13 +86,12 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
         }
 
         processedIds.clear();
-        LOG.info("connector=mautourism-odoo mode=legacy_polling deactivated=true model={}", properties.model());
+        LOG.info("Odoo polling connector deactivated: model={}", properties.model());
     }
 
     private void poll() {
-        if (!active.get()) {
+        if (!active.get())
             return;
-        }
 
         try {
             List<Object> domain = buildDomain();
@@ -108,29 +104,36 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
                     properties.getEffectiveBatchSize());
 
             if (records.isEmpty()) {
+                LOG.debug("No new records found for {}", properties.model());
                 lastPollTime = Instant.now();
                 return;
             }
 
-            LOG.warn(
-                    "connector=mautourism-odoo mode=legacy_polling records_found={} model={} reason={}",
-                    records.size(),
-                    properties.model(),
-                    properties.compatibilityReason());
+            LOG.info("Found {} records to process for {}", records.size(), properties.model());
 
             for (Map<String, Object> record : records) {
-                if (!active.get()) {
+                if (!active.get())
                     break;
-                }
                 processRecord(record);
             }
 
             lastPollTime = Instant.now();
-        } catch (Exception exception) {
-            LOG.error(
-                    "connector=mautourism-odoo mode=legacy_polling error=true model={} message={}",
-                    properties.model(),
-                    exception.getMessage());
+
+            if (processedIds.size() > 1000) {
+                synchronized (processedIds) {
+                    Set<Integer> newSet = new HashSet<>();
+                    int count = 0;
+                    for (Integer id : processedIds) {
+                        if (count++ > 500)
+                            newSet.add(id);
+                    }
+                    processedIds.clear();
+                    processedIds.addAll(newSet);
+                }
+            }
+
+        } catch (Exception e) {
+            LOG.error("Error polling Odoo for {}: {}", properties.model(), e.getMessage());
         }
     }
 
@@ -160,9 +163,9 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
 
         List<String> customFields = client.parseFields(properties.fields());
         if (customFields != null) {
-            for (String field : customFields) {
-                if (!fields.contains(field)) {
-                    fields.add(field);
+            for (String f : customFields) {
+                if (!fields.contains(f)) {
+                    fields.add(f);
                 }
             }
         }
@@ -171,8 +174,16 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
     }
 
     private void processRecord(Map<String, Object> record) {
-        Integer recordId = record.get("id") instanceof Number number ? number.intValue() : null;
-        if (recordId == null || processedIds.contains(recordId)) {
+        Integer recordId = record.get("id") != null
+                ? ((Number) record.get("id")).intValue()
+                : null;
+
+        if (recordId == null) {
+            return;
+        }
+
+        // We still keep the local cache to save unnecessary network calls
+        if (processedIds.contains(recordId)) {
             return;
         }
 
@@ -188,62 +199,58 @@ public class OdooPollingExecutable implements InboundConnectorExecutable<Inbound
                 properties.getEffectiveTriggerField());
 
         try {
-            String messageId = String.format("legacy-odoo-poll-%s-%d-%s",
+            // Construct a standardized, unique Message ID for deduplication
+            // Format: odoo-{model}-{id}-{eventType}
+            // Example: odoo-res.partner-123-create
+            String messageId = String.format("odoo-%s-%d-%s",
                     properties.model(),
                     recordId,
                     eventType);
 
             CorrelationRequest request = CorrelationRequest.builder()
-                    .messageId(messageId)
+                    .messageId(messageId) // Critical for Deduplication
                     .variables(event.toVariables())
                     .build();
 
             CorrelationResult result = context.correlate(request);
             handleCorrelationResult(result, event);
+
             processedIds.add(recordId);
-        } catch (Exception exception) {
-            LOG.error(
-                    "connector=mautourism-odoo mode=legacy_polling correlation_failed=true model={} record_id={} message={}",
-                    properties.model(),
-                    recordId,
-                    exception.getMessage());
+
+        } catch (Exception e) {
+            LOG.error("Failed to correlate event for record {}: {}", recordId, e.getMessage());
         }
     }
 
     private String determineEventType(Map<String, Object> record) {
         Object createDate = record.get("create_date");
         Object writeDate = record.get("write_date");
+
         boolean isNew = createDate != null && writeDate != null && createDate.equals(writeDate);
 
-        if (isNew && properties.triggerOnNew()) {
-            return "create";
+        if (isNew) {
+            if (properties.triggerOnNew()) {
+                return "create";
+            }
+        } else {
+            if (properties.triggerOnModified()) {
+                return "write";
+            }
         }
-        if (!isNew && properties.triggerOnModified()) {
-            return "write";
-        }
+
         return null;
     }
 
     private void handleCorrelationResult(CorrelationResult result, OdooPollingEvent event) {
         switch (result) {
-            case CorrelationResult.Success ignored -> LOG.info(
-                    "connector=mautourism-odoo mode=legacy_polling correlated=true model={} record_id={} event_type={}",
-                    event.model(),
-                    event.recordId(),
-                    event.eventType());
+            case CorrelationResult.Success ignored -> LOG.info("Event correlated: model={}, id={}, type={}",
+                    event.model(), event.recordId(), event.eventType());
             case CorrelationResult.Failure failure -> {
-                if (failure.handlingStrategy() instanceof CorrelationFailureHandlingStrategy.Ignore) {
-                    LOG.debug(
-                            "connector=mautourism-odoo mode=legacy_polling ignored=true model={} record_id={} event_type={}",
-                            event.model(),
-                            event.recordId(),
-                            event.eventType());
-                } else {
-                    LOG.error(
-                            "connector=mautourism-odoo mode=legacy_polling failure=true model={} record_id={} message={}",
-                            event.model(),
-                            event.recordId(),
-                            failure.message());
+                switch (failure.handlingStrategy()) {
+                    case CorrelationFailureHandlingStrategy.ForwardErrorToUpstream ignored ->
+                        LOG.error("Correlation failed: {}", failure.message());
+                    case CorrelationFailureHandlingStrategy.Ignore ignored ->
+                        LOG.debug("No waiting process for event: {}", failure.message());
                 }
             }
         }

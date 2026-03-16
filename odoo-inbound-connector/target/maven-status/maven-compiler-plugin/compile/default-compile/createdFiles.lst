@@ -6,7 +6,6 @@ io\camunda\connector\odoo\inbound\OdooPollingEvent.class
 io\camunda\connector\odoo\inbound\OdooPollingClient$1.class
 io\camunda\connector\odoo\inbound\OdooPollingClient$2.class
 io\camunda\connector\odoo\inbound\OdooPollingClient.class
-io\camunda\connector\odoo\inbound\MauOdooEventEnvelope.class
 io\camunda\connector\odoo\inbound\OdooInboundExecutable$WebhookProcessingResult.class
 io\camunda\connector\odoo\inbound\OdooInboundConnectorAutoConfiguration.class
 io\camunda\connector\odoo\inbound\OdooInboundExecutable.class

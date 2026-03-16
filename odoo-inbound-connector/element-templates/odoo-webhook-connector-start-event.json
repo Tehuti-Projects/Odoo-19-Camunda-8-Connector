@@ -2,7 +2,7 @@
     "$schema": "https://unpkg.com/@camunda/zeebe-element-templates-json-schema/resources/schema.json",
     "name": "Odoo Webhook Start Event",
     "id": "io.camunda.odoo-webhook-start-event",
-    "description": "Start a process when Odoo emits an approved MAU outbound event envelope",
+    "description": "Start a process instance when Odoo sends a webhook event (create, update, delete)",
     "version": 1,
     "documentationRef": "https://github.com/yourusername/odoo-camunda-connector",
     "icon": {
@@ -61,44 +61,56 @@
             }
         },
         {
-            "id": "allowedEventTypes",
-            "label": "Allowed Event Types",
-            "description": "Comma-separated MAU Odoo event types to accept. Leave empty to accept the full approved MAU Odoo outbound set.",
+            "id": "allowedModels",
+            "label": "Allowed Models",
+            "description": "Comma-separated list of Odoo models to accept (e.g., 'res.partner,sale.order'). Leave empty for all models",
             "type": "String",
             "feel": "optional",
             "optional": true,
             "group": "filtering",
             "binding": {
                 "type": "zeebe:property",
-                "name": "allowedEventTypes"
+                "name": "allowedModels"
             }
         },
         {
-            "id": "allowLegacyGenericWebhook",
-            "label": "Allow Legacy Generic Webhook",
-            "description": "Compatibility flag only. Generic non-envelope payloads remain non-authoritative and are still rejected by the MAU connector.",
+            "id": "eventType",
+            "label": "Event Type",
+            "description": "Type of Odoo event to listen for",
             "type": "Dropdown",
-            "value": "false",
+            "value": "all",
             "group": "filtering",
             "choices": [
                 {
-                    "name": "Disabled",
-                    "value": "false"
+                    "name": "All Events",
+                    "value": "all"
                 },
                 {
-                    "name": "Legacy Compatibility Review Only",
-                    "value": "true"
+                    "name": "Create Only",
+                    "value": "create"
+                },
+                {
+                    "name": "Update Only",
+                    "value": "write"
+                },
+                {
+                    "name": "Delete Only",
+                    "value": "unlink"
+                },
+                {
+                    "name": "Create or Update",
+                    "value": "create_write"
                 }
             ],
             "binding": {
                 "type": "zeebe:property",
-                "name": "allowLegacyGenericWebhook"
+                "name": "eventType"
             }
         },
         {
             "id": "activationCondition",
             "label": "Activation Condition",
-            "description": "FEEL expression against the MAU event envelope variables (for example, `= event_type = \"odoo.deposit_paid.v1\" and reference_code != null`).",
+            "description": "FEEL expression to determine if the event should activate this connector (e.g., odooModel = \"res.partner\" and odooOperation = \"create\")",
             "type": "Text",
             "feel": "required",
             "optional": true,

@@ -1,7 +1,5 @@
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-outbound-connector\src\main\java\io\camunda\connector\odoo\dto\MauConnectorResult.java
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-outbound-connector\src\main\java\io\camunda\connector\odoo\dto\OdooAuthentication.java
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-outbound-connector\src\main\java\io\camunda\connector\odoo\dto\OdooRequest.java
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-outbound-connector\src\main\java\io\camunda\connector\odoo\MauBridgeClient.java
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-outbound-connector\src\main\java\io\camunda\connector\odoo\MauBridgeOperation.java
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-outbound-connector\src\main\java\io\camunda\connector\odoo\OdooApiClient.java
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-outbound-connector\src\main\java\io\camunda\connector\odoo\OdooOutboundFunction.java
+C:\Users\Yassin Hendawy\OneDrive\Business\Tehuti Projects\Operations\Tehuti TEMPLE\Camunda SELF HOSTED\Connectors\odoo-outbound-connector\src\main\java\io\camunda\connector\odoo\dto\OdooAuthentication.java
+C:\Users\Yassin Hendawy\OneDrive\Business\Tehuti Projects\Operations\Tehuti TEMPLE\Camunda SELF HOSTED\Connectors\odoo-outbound-connector\src\main\java\io\camunda\connector\odoo\dto\OdooRequest.java
+C:\Users\Yassin Hendawy\OneDrive\Business\Tehuti Projects\Operations\Tehuti TEMPLE\Camunda SELF HOSTED\Connectors\odoo-outbound-connector\src\main\java\io\camunda\connector\odoo\dto\OdooResult.java
+C:\Users\Yassin Hendawy\OneDrive\Business\Tehuti Projects\Operations\Tehuti TEMPLE\Camunda SELF HOSTED\Connectors\odoo-outbound-connector\src\main\java\io\camunda\connector\odoo\OdooApiClient.java
+C:\Users\Yassin Hendawy\OneDrive\Business\Tehuti Projects\Operations\Tehuti TEMPLE\Camunda SELF HOSTED\Connectors\odoo-outbound-connector\src\main\java\io\camunda\connector\odoo\OdooOutboundFunction.java

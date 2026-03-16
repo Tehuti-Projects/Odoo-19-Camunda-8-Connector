@@ -3,42 +3,24 @@ package io.camunda.connector.odoo.dto;
 import jakarta.validation.constraints.NotEmpty;
 
 /**
- * Authentication configuration for the MAU Odoo connector.
- *
- * <p>
- * Bridge commands and direct JSON-2 reads use different credentials on purpose:
- * bridge writes use the MAU bridge technical key, while optional direct reads use
- * Odoo's JSON-2 API key.
+ * Authentication configuration for Odoo 19 External JSON-2 API.
  */
 public record OdooAuthentication(
         @NotEmpty String url,
-        String database,
-        String apiKey,
-        String bridgeApiKey) {
-
-    public void validateBaseUrl() {
+        @NotEmpty String database,
+        @NotEmpty String apiKey) {
+    public void validate() {
         if (url == null || url.isBlank()) {
             throw new IllegalArgumentException("Odoo URL is required");
         }
         if (!url.startsWith("http://") && !url.startsWith("https://")) {
             throw new IllegalArgumentException("URL must start with http:// or https://");
         }
-    }
-
-    public void validateForBridge() {
-        validateBaseUrl();
-        if (bridgeApiKey == null || bridgeApiKey.isBlank()) {
-            throw new IllegalArgumentException("bridgeApiKey is required for MAU bridge commands");
-        }
-    }
-
-    public void validateForDirectRead() {
-        validateBaseUrl();
         if (database == null || database.isBlank()) {
-            throw new IllegalArgumentException("database is required for direct Odoo JSON-2 reads");
+            throw new IllegalArgumentException("Database name is required");
         }
         if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalArgumentException("apiKey is required for direct Odoo JSON-2 reads");
+            throw new IllegalArgumentException("API key is required");
         }
     }
 
