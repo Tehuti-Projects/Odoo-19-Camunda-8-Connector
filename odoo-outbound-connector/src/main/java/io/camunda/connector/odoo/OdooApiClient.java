@@ -15,7 +15,7 @@ import java.time.Duration;
 import java.util.*;
 
 /**
- * Production-grade HTTP client for Odoo 19's External JSON-2 API.
+ * Direct read-only HTTP client for Odoo 19's External JSON-2 API.
  * 
  * <p>
  * Uses the new Odoo 19 /json/2 endpoint format:
@@ -29,6 +29,10 @@ import java.util.*;
  * <p>
  * This implementation uses Java's built-in HttpClient (java.net.http) to avoid
  * classloader conflicts with the Camunda 8 Connector Runtime.
+ *
+ * <p>
+ * MAU uses this client only for controlled direct reads. Critical business writes
+ * must go through the MAU bridge endpoints instead of generic JSON-2 mutation.
  * 
  * @see <a href=
  *      "https://www.odoo.com/documentation/19.0/developer/reference/external_api.html">Odoo
@@ -91,7 +95,7 @@ public class OdooApiClient implements AutoCloseable {
      * @return The response from Odoo (type depends on the method)
      * @throws OdooApiException If the request fails
      */
-    public Object execute(String model, String method, Map<String, Object> body)
+    private Object execute(String model, String method, Map<String, Object> body)
             throws OdooApiException {
         return executeWithRetry(model, method, body, MAX_RETRIES);
     }
@@ -190,42 +194,8 @@ public class OdooApiClient implements AutoCloseable {
         }
     }
 
-    // ==================== CRUD Operations ====================
+    // ==================== Read-only Operations ====================
 
-    /**
-     * Create a new record in Odoo.
-     * 
-     * @param model  The model name
-     * @param values The field values for the new record
-     * @return The ID of the created record
-     */
-    public Integer create(String model, Map<String, Object> values) throws OdooApiException {
-        Map<String, Object> body = new LinkedHashMap<>();
-        // Odoo 19 JSON-2 API expects vals_list as an array of value objects
-        body.put("vals_list", List.of(values));
-
-        Object result = execute(model, "create", body);
-        // Odoo returns a list of created IDs when using vals_list
-        if (result instanceof List<?> list && !list.isEmpty()) {
-            Object first = list.get(0);
-            if (first instanceof Number) {
-                return ((Number) first).intValue();
-            }
-        }
-        if (result instanceof Number) {
-            return ((Number) result).intValue();
-        }
-        throw new OdooApiException("Unexpected create result type: " + result);
-    }
-
-    /**
-     * Read records by IDs.
-     * 
-     * @param model  The model name
-     * @param ids    List of record IDs to read
-     * @param fields Optional list of fields to read (null = all fields)
-     * @return List of record data maps
-     */
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> read(String model, List<Integer> ids, List<String> fields)
             throws OdooApiException {
@@ -242,48 +212,6 @@ public class OdooApiClient implements AutoCloseable {
         throw new OdooApiException("Unexpected read result type: " + result);
     }
 
-    /**
-     * Update existing records.
-     * 
-     * @param model  The model name
-     * @param ids    List of record IDs to update
-     * @param values The field values to update
-     * @return true if successful
-     */
-    public boolean write(String model, List<Integer> ids, Map<String, Object> values)
-            throws OdooApiException {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("ids", ids);
-        body.put("values", values);
-
-        Object result = execute(model, "write", body);
-        return Boolean.TRUE.equals(result);
-    }
-
-    /**
-     * Delete records.
-     * 
-     * @param model The model name
-     * @param ids   List of record IDs to delete
-     * @return true if successful
-     */
-    public boolean unlink(String model, List<Integer> ids) throws OdooApiException {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("ids", ids);
-
-        Object result = execute(model, "unlink", body);
-        return Boolean.TRUE.equals(result);
-    }
-
-    /**
-     * Search for record IDs matching a domain.
-     * 
-     * @param model  The model name
-     * @param domain The search domain (Odoo domain format)
-     * @param limit  Maximum number of records to return (null = no limit)
-     * @param offset Number of records to skip (null = 0)
-     * @return List of matching record IDs
-     */
     public List<Integer> search(String model, List<Object> domain, Integer limit, Integer offset)
             throws OdooApiException {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -302,16 +230,6 @@ public class OdooApiClient implements AutoCloseable {
         throw new OdooApiException("Unexpected search result type: " + result);
     }
 
-    /**
-     * Search and read records in one call.
-     * 
-     * @param model  The model name
-     * @param domain The search domain
-     * @param fields Fields to read (null = all fields)
-     * @param limit  Maximum records to return
-     * @param offset Records to skip
-     * @return List of matching records with requested fields
-     */
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> searchRead(String model, List<Object> domain,
             List<String> fields, Integer limit, Integer offset) throws OdooApiException {
@@ -331,13 +249,6 @@ public class OdooApiClient implements AutoCloseable {
         throw new OdooApiException("Unexpected search_read result type: " + result);
     }
 
-    /**
-     * Count records matching a domain.
-     * 
-     * @param model  The model name
-     * @param domain The search domain
-     * @return Number of matching records
-     */
     public Integer searchCount(String model, List<Object> domain) throws OdooApiException {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("domain", domain != null ? domain : List.of());
@@ -349,12 +260,6 @@ public class OdooApiClient implements AutoCloseable {
         throw new OdooApiException("Unexpected search_count result type: " + result);
     }
 
-    /**
-     * Get fields definition for a model.
-     * 
-     * @param model The model name
-     * @return Map of field names to field definitions
-     */
     @SuppressWarnings("unchecked")
     public Map<String, Object> fieldsGet(String model, List<String> fields) throws OdooApiException {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -368,27 +273,6 @@ public class OdooApiClient implements AutoCloseable {
             return (Map<String, Object>) result;
         }
         throw new OdooApiException("Unexpected fields_get result type: " + result);
-    }
-
-    /**
-     * Call a custom method on the model.
-     * 
-     * @param model  The model name
-     * @param method The method name
-     * @param ids    Record IDs (for record-level methods)
-     * @param args   Additional method arguments
-     * @return The method result
-     */
-    public Object callMethod(String model, String method, List<Integer> ids, Map<String, Object> args)
-            throws OdooApiException {
-        Map<String, Object> body = new LinkedHashMap<>();
-        if (ids != null && !ids.isEmpty()) {
-            body.put("ids", ids);
-        }
-        if (args != null) {
-            body.putAll(args);
-        }
-        return execute(model, method, body);
     }
 
     /**

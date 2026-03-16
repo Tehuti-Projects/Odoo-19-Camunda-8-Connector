@@ -2,7 +2,7 @@
     "$schema": "https://unpkg.com/@camunda/zeebe-element-templates-json-schema/resources/schema.json",
     "name": "Odoo Webhook Message Start Event",
     "id": "io.camunda.odoo-webhook-message-start-event",
-    "description": "Start a process instance with message correlation when Odoo sends a webhook",
+    "description": "Start a process with message correlation when Odoo emits an approved MAU outbound event envelope",
     "version": 1,
     "documentationRef": "https://github.com/yourusername/odoo-camunda-connector",
     "icon": {
@@ -66,50 +66,38 @@
             }
         },
         {
-            "id": "allowedModels",
-            "label": "Allowed Models",
-            "description": "Comma-separated list of Odoo models to accept (e.g., 'res.partner,sale.order'). Leave empty for all models",
+            "id": "allowedEventTypes",
+            "label": "Allowed Event Types",
+            "description": "Comma-separated MAU Odoo event types to accept. Leave empty to accept the full approved MAU Odoo outbound set.",
             "type": "String",
             "feel": "optional",
             "optional": true,
             "group": "filtering",
             "binding": {
                 "type": "zeebe:property",
-                "name": "allowedModels"
+                "name": "allowedEventTypes"
             }
         },
         {
-            "id": "eventType",
-            "label": "Event Type",
-            "description": "Type of Odoo event to listen for",
+            "id": "allowLegacyGenericWebhook",
+            "label": "Allow Legacy Generic Webhook",
+            "description": "Compatibility flag only. Generic non-envelope payloads remain non-authoritative and are still rejected by the MAU connector.",
             "type": "Dropdown",
-            "value": "all",
+            "value": "false",
             "group": "filtering",
             "choices": [
                 {
-                    "name": "All Events",
-                    "value": "all"
+                    "name": "Disabled",
+                    "value": "false"
                 },
                 {
-                    "name": "Create Only",
-                    "value": "create"
-                },
-                {
-                    "name": "Update Only",
-                    "value": "write"
-                },
-                {
-                    "name": "Delete Only",
-                    "value": "unlink"
-                },
-                {
-                    "name": "Create or Update",
-                    "value": "create_write"
+                    "name": "Legacy Compatibility Review Only",
+                    "value": "true"
                 }
             ],
             "binding": {
                 "type": "zeebe:property",
-                "name": "eventType"
+                "name": "allowLegacyGenericWebhook"
             }
         },
         {
@@ -130,7 +118,7 @@
         {
             "id": "correlationKeyExpression",
             "label": "Correlation Key (Process)",
-            "description": "FEEL expression to extract correlation key from webhook (e.g., odooRecordId)",
+            "description": "FEEL expression to derive the BPMN correlation key from the MAU event envelope (for example, `= camunda_business_key` or `= reference_code`).",
             "type": "String",
             "feel": "required",
             "group": "correlation",
@@ -145,7 +133,7 @@
         {
             "id": "messageIdExpression",
             "label": "Message ID Expression",
-            "description": "FEEL expression for unique message ID to prevent duplicates (e.g., odooRecordId)",
+            "description": "FEEL expression for unique message ID. Prefer `= external_ref` to align with MAU deduplication.",
             "type": "String",
             "feel": "required",
             "optional": true,
