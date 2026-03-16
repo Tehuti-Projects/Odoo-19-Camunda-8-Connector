@@ -5,169 +5,188 @@ import io.camunda.connector.api.error.ConnectorException;
 import io.camunda.connector.api.outbound.OutboundConnectorContext;
 import io.camunda.connector.api.outbound.OutboundConnectorFunction;
 import io.camunda.connector.odoo.OdooApiClient.OdooApiException;
-import io.camunda.connector.odoo.dto.MauConnectorResult;
 import io.camunda.connector.odoo.dto.OdooRequest;
-import java.util.List;
-import java.util.Map;
+import io.camunda.connector.odoo.dto.OdooResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Camunda 8 Outbound Connector for Odoo 19 External JSON-2 API.
+ * 
+ * <p>
+ * Provides bidirectional integration between Camunda workflows and Odoo ERP,
+ * supporting CRUD operations and custom method calls on any Odoo model.
+ * 
+ * <p>
+ * Features:
+ * <ul>
+ * <li>Full CRUD support (Create, Read, Update, Delete)</li>
+ * <li>Search and Search-Read operations with domain filters</li>
+ * <li>Search-Count for record counting</li>
+ * <li>Custom method calls for advanced operations</li>
+ * <li>Automatic retry on transient failures</li>
+ * <li>Comprehensive error handling with BPMN error codes</li>
+ * </ul>
+ * 
+ * @see <a href=
+ *      "https://www.odoo.com/documentation/19.0/developer/reference/external_api.html">Odoo
+ *      External JSON-2 API</a>
+ */
 @OutboundConnector(name = "Odoo 19", inputVariables = {
         "authentication",
         "operation",
-        "payload",
-        "actor_type",
-        "external_subject",
-        "external_ref",
-        "correlation_id",
-        "occurred_at",
-        "camunda_business_key",
-        "camunda_process_key",
-        "camunda_process_instance_key",
-        "reference_code",
-        "component_external_ref",
-        "external_offer_ref",
         "model",
         "recordId",
         "recordIds",
+        "values",
         "fields",
         "domain",
         "limit",
         "offset",
         "order",
-        "direct_access_purpose"
+        "methodName",
+        "methodArgs",
+        "context"
 }, type = "io.camunda:odoo-outbound:1")
+// Note: Element template is handcrafted in
+// element-templates/odoo-outbound-connector.json
 public class OdooOutboundFunction implements OutboundConnectorFunction {
 
     private static final Logger LOG = LoggerFactory.getLogger(OdooOutboundFunction.class);
+
+    // BPMN Error Codes for error handling in processes
+    public static final String ERROR_AUTHENTICATION = "ODOO_AUTH_ERROR";
+    public static final String ERROR_PERMISSION = "ODOO_PERMISSION_ERROR";
+    public static final String ERROR_NOT_FOUND = "ODOO_NOT_FOUND";
+    public static final String ERROR_VALIDATION = "ODOO_VALIDATION_ERROR";
+    public static final String ERROR_CONNECTION = "ODOO_CONNECTION_ERROR";
+    public static final String ERROR_UNKNOWN = "ODOO_ERROR";
 
     @Override
     public Object execute(OutboundConnectorContext context) throws Exception {
         OdooRequest request = context.bindVariables(OdooRequest.class);
 
+        LOG.info("Executing Odoo operation: {} on model {}", request.operation(), request.model());
+
+        // Validate the request
         try {
             request.validate();
-        } catch (IllegalArgumentException exception) {
-            throw new ConnectorException("validation_error", exception.getMessage(), exception);
+        } catch (IllegalArgumentException e) {
+            throw new ConnectorException(ERROR_VALIDATION, "Invalid request: " + e.getMessage(), e);
         }
 
-        MauBridgeOperation bridgeOperation = MauBridgeOperation.fromOperation(request.normalizedOperation()).orElse(null);
-        if (bridgeOperation != null) {
-            try (MauBridgeClient bridgeClient = new MauBridgeClient(request.authentication())) {
-                return bridgeClient.execute(bridgeOperation, request);
-            }
-        }
-
+        // Execute the operation
         try (OdooApiClient client = new OdooApiClient(request.authentication())) {
-            return executeDirectRead(client, request);
-        } catch (OdooApiException exception) {
-            LOG.error(
-                    "connector=mautourism-odoo mode=direct_read_only operation={} model={} error={}",
-                    request.normalizedOperation(),
-                    request.model(),
-                    exception.getMessage());
-            return mapDirectReadError(exception, request);
+            return executeOperation(client, request);
+        } catch (OdooApiException e) {
+            LOG.error("Odoo API error: {}", e.getMessage());
+            return handleApiException(e, request);
         }
     }
 
-    private MauConnectorResult executeDirectRead(OdooApiClient client, OdooRequest request)
+    private OdooResult executeOperation(OdooApiClient client, OdooRequest request)
             throws OdooApiException {
         String model = request.model();
-        String operation = request.normalizedOperation();
-
-        LOG.info(
-                "connector=mautourism-odoo mode=direct_read_only operation={} model={} purpose={}",
-                operation,
-                model,
-                request.directAccessPurpose());
+        String operation = request.operation();
 
         return switch (operation) {
-            case "READ" -> {
-                List<Map<String, Object>> records = client.read(model, request.getEffectiveRecordIds(), request.fields());
-                yield MauConnectorResult.directReadSuccess(operation, endpointForRead(model, "read"), Map.of(
-                        "model", model,
-                        "records", records,
-                        "direct_access_purpose", request.directAccessPurpose()));
+            case "CREATE" -> {
+                Integer id = client.create(model, request.values());
+                LOG.info("Created {} record with ID: {}", model, id);
+                yield OdooResult.created(model, id);
             }
+
+            case "READ" -> {
+                List<Integer> ids = request.getEffectiveRecordIds();
+                List<Map<String, Object>> records = client.read(model, ids, request.fields());
+                LOG.info("Read {} records from {}", records.size(), model);
+                yield OdooResult.read(model, records);
+            }
+
+            case "UPDATE" -> {
+                List<Integer> ids = request.getEffectiveRecordIds();
+                boolean success = client.write(model, ids, request.values());
+                if (!success) {
+                    throw new OdooApiException("Update operation returned false");
+                }
+                LOG.info("Updated {} records in {}", ids.size(), model);
+                yield OdooResult.updated(model, ids);
+            }
+
+            case "DELETE" -> {
+                List<Integer> ids = request.getEffectiveRecordIds();
+                boolean success = client.unlink(model, ids);
+                if (!success) {
+                    throw new OdooApiException("Delete operation returned false");
+                }
+                LOG.info("Deleted {} records from {}", ids.size(), model);
+                yield OdooResult.deleted(model, ids);
+            }
+
             case "SEARCH" -> {
                 List<Integer> ids = client.search(model, request.domain(), request.limit(), request.offset());
-                yield MauConnectorResult.directReadSuccess(operation, endpointForRead(model, "search"), Map.of(
-                        "model", model,
-                        "search_ids", ids,
-                        "direct_access_purpose", request.directAccessPurpose()));
+                LOG.info("Found {} record IDs in {}", ids.size(), model);
+                yield OdooResult.searched(model, ids);
             }
+
             case "SEARCH_READ" -> {
                 List<Map<String, Object>> records = client.searchRead(
                         model, request.domain(), request.fields(), request.limit(), request.offset());
-                yield MauConnectorResult.directReadSuccess(operation, endpointForRead(model, "search_read"), Map.of(
-                        "model", model,
-                        "records", records,
-                        "direct_access_purpose", request.directAccessPurpose()));
+                LOG.info("Search-Read found {} records in {}", records.size(), model);
+                yield OdooResult.searchedAndRead(model, records);
             }
+
             case "SEARCH_COUNT" -> {
                 Integer count = client.searchCount(model, request.domain());
-                yield MauConnectorResult.directReadSuccess(operation, endpointForRead(model, "search_count"), Map.of(
-                        "model", model,
-                        "count", count,
-                        "direct_access_purpose", request.directAccessPurpose()));
+                LOG.info("Counted {} records in {} matching domain", count, model);
+                yield OdooResult.counted(model, count);
             }
-            default -> throw new ConnectorException(
-                    "validation_error",
-                    "Unsupported direct read-only operation: " + operation);
+
+            case "CALL_METHOD" -> {
+                String methodName = request.methodName();
+                Object result = client.callMethod(model, methodName,
+                        request.getEffectiveRecordIds(), request.methodArgs());
+                LOG.info("Called method {} on {} with result type: {}",
+                        methodName, model, result != null ? result.getClass().getSimpleName() : "null");
+                yield OdooResult.methodCalled(model, methodName, result);
+            }
+
+            default -> throw new ConnectorException(ERROR_VALIDATION,
+                    "Unsupported operation: " + operation);
         };
     }
 
-    private MauConnectorResult mapDirectReadError(OdooApiException exception, OdooRequest request) {
-        int statusCode = exception.getStatusCode();
-        String errorClass = classifyDirectReadError(exception);
-        boolean retryable = "downstream_unavailable".equals(errorClass)
-                || "timeout".equals(errorClass)
-                || "internal_error".equals(errorClass);
-        return MauConnectorResult.directReadFailure(
-                request.normalizedOperation(),
-                endpointForRead(request.model(), request.normalizedOperation().toLowerCase()),
-                statusCode > 0 ? statusCode : impliedStatus(errorClass),
-                errorClass,
-                exception.getMessage(),
-                retryable);
-    }
+    /**
+     * Handle API exceptions and convert to appropriate BPMN errors.
+     */
+    private OdooResult handleApiException(OdooApiException e, OdooRequest request) {
+        @SuppressWarnings("unused")
+        String errorCode;
+        String operation = request.operation();
+        String model = request.model();
 
-    private String classifyDirectReadError(OdooApiException exception) {
-        if (exception.isAuthenticationError()) {
-            return "unauthorized";
+        if (e.isAuthenticationError()) {
+            errorCode = ERROR_AUTHENTICATION;
+        } else if (e.isPermissionError()) {
+            errorCode = ERROR_PERMISSION;
+        } else if (e.isNotFoundError()) {
+            errorCode = ERROR_NOT_FOUND;
+        } else if (e.isValidationError()) {
+            errorCode = ERROR_VALIDATION;
+        } else if (e.getMessage() != null && e.getMessage().startsWith("Network error")) {
+            errorCode = ERROR_CONNECTION;
+        } else {
+            errorCode = ERROR_UNKNOWN;
         }
-        if (exception.isPermissionError()) {
-            return "forbidden";
-        }
-        if (exception.isNotFoundError()) {
-            return "not_found";
-        }
-        if (exception.isValidationError()) {
-            return "validation_error";
-        }
-        String message = exception.getMessage();
-        if (message != null && message.startsWith("Network error")) {
-            return "downstream_unavailable";
-        }
-        if (message != null && message.toLowerCase().contains("timeout")) {
-            return "timeout";
-        }
-        return "internal_error";
-    }
 
-    private int impliedStatus(String errorClass) {
-        return switch (errorClass) {
-            case "validation_error" -> 400;
-            case "unauthorized" -> 401;
-            case "forbidden" -> 403;
-            case "not_found" -> 404;
-            case "downstream_unavailable" -> 503;
-            case "timeout" -> 504;
-            default -> 500;
-        };
-    }
+        OdooApiClient.OdooError error = e.getError();
+        if (error != null) {
+            return OdooResult.error(operation, model, e.getMessage(), error.name(), error.statusCode());
+        }
 
-    private String endpointForRead(String model, String method) {
-        return "/json/2/" + model + "/" + method;
+        return OdooResult.error(operation, model, e.getMessage());
     }
 }

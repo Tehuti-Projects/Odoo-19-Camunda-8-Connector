@@ -2,6 +2,9 @@ package io.camunda.connector.odoo.inbound;
 
 import jakarta.validation.constraints.NotEmpty;
 
+/**
+ * Configuration properties for Odoo inbound polling connector.
+ */
 public record OdooPollingProperties(
         @NotEmpty String url,
         @NotEmpty String database,
@@ -12,18 +15,14 @@ public record OdooPollingProperties(
         String triggerCondition,
         String filterDomain,
         String fields,
-        Integer batchSize,
-        Boolean compatibilityModeEnabled,
-        String compatibilityReason) {
-
+        Integer batchSize) {
     public int getEffectivePollingInterval() {
         return pollingInterval != null && pollingInterval >= 10 ? pollingInterval : 30;
     }
 
     public int getEffectiveBatchSize() {
-        if (batchSize == null) {
+        if (batchSize == null)
             return 50;
-        }
         return Math.max(1, Math.min(100, batchSize));
     }
 
@@ -37,16 +36,5 @@ public record OdooPollingProperties(
 
     public String getEffectiveTriggerField() {
         return triggerField != null && !triggerField.isBlank() ? triggerField : "write_date";
-    }
-
-    public void validateForMau() {
-        if (!Boolean.TRUE.equals(compatibilityModeEnabled)) {
-            throw new IllegalArgumentException(
-                    "Generic Odoo model polling is disabled by default in MAU. Use Odoo outbound event webhooks or approved recovery tooling instead.");
-        }
-        if (compatibilityReason == null || compatibilityReason.isBlank()) {
-            throw new IllegalArgumentException(
-                    "compatibilityReason is required when enabling legacy polling in MAU.");
-        }
     }
 }

@@ -1,698 +1,452 @@
 {
-  "$schema": "https://unpkg.com/@camunda/zeebe-element-templates-json-schema/resources/schema.json",
-  "name": "MAU Odoo Connector",
-  "id": "io.camunda.connector.Odoo.Outbound",
-  "description": "MAU bridge-first connector for approved Camunda to Odoo commands plus restricted read-only JSON-2 access",
-  "metadata": {
-    "keywords": [
-      "odoo",
-      "camunda",
-      "mau",
-      "bridge",
-      "json-2"
-    ]
-  },
-  "documentationRef": "https://www.odoo.com/documentation/19.0/developer/reference/external_api.html",
-  "version": 2,
-  "category": {
-    "id": "connectors",
-    "name": "Connectors"
-  },
-  "appliesTo": [
-    "bpmn:Task"
-  ],
-  "elementType": {
-    "value": "bpmn:ServiceTask"
-  },
-  "groups": [
-    {
-      "id": "authentication",
-      "label": "Authentication"
+    "$schema": "https://unpkg.com/@camunda/zeebe-element-templates-json-schema/resources/schema.json",
+    "name": "Odoo 19 Connector",
+    "id": "io.camunda.connector.Odoo.Outbound",
+    "description": "Execute CRUD operations and method calls on Odoo 19 via JSON-2 API",
+    "metadata": {
+        "keywords": [
+            "odoo",
+            "erp",
+            "crm",
+            "sales",
+            "inventory",
+            "json-2"
+        ]
     },
-    {
-      "id": "operation",
-      "label": "Operation"
+    "documentationRef": "https://www.odoo.com/documentation/19.0/developer/reference/external_api.html",
+    "version": 1,
+    "category": {
+        "id": "connectors",
+        "name": "Connectors"
     },
-    {
-      "id": "correlation",
-      "label": "MAU Correlation"
+    "appliesTo": [
+        "bpmn:Task"
+    ],
+    "elementType": {
+        "value": "bpmn:ServiceTask"
     },
-    {
-      "id": "directRead",
-      "label": "Direct Read"
-    },
-    {
-      "id": "output",
-      "label": "Output Mapping"
-    },
-    {
-      "id": "error",
-      "label": "Error Handling"
-    },
-    {
-      "id": "retries",
-      "label": "Retries"
-    }
-  ],
-  "properties": [
-    {
-      "value": "io.camunda:odoo-outbound:1",
-      "binding": {
-        "property": "type",
-        "type": "zeebe:taskDefinition"
-      },
-      "type": "Hidden"
-    },
-    {
-      "id": "authentication.url",
-      "label": "Odoo URL",
-      "description": "Base URL of the MAU Odoo deployment",
-      "optional": false,
-      "constraints": {
-        "notEmpty": true,
-        "pattern": {
-          "value": "^https?://.*",
-          "message": "Must be a valid URL starting with http:// or https://"
+    "groups": [
+        {
+            "id": "authentication",
+            "label": "Authentication"
+        },
+        {
+            "id": "operation",
+            "label": "Operation"
+        },
+        {
+            "id": "output",
+            "label": "Output Mapping"
+        },
+        {
+            "id": "error",
+            "label": "Error Handling"
+        },
+        {
+            "id": "retries",
+            "label": "Retries"
         }
-      },
-      "feel": "optional",
-      "group": "authentication",
-      "binding": {
-        "name": "authentication.url",
-        "type": "zeebe:input"
-      },
-      "type": "String"
-    },
-    {
-      "id": "authentication.bridgeApiKey",
-      "label": "Bridge API Key",
-      "description": "Technical credential for MAU bridge commands. Required for bridge operations.",
-      "optional": true,
-      "constraints": {
-        "notEmpty": true
-      },
-      "feel": "optional",
-      "group": "authentication",
-      "binding": {
-        "name": "authentication.bridgeApiKey",
-        "type": "zeebe:input"
-      },
-      "type": "String"
-    },
-    {
-      "id": "authentication.database",
-      "label": "Database",
-      "description": "Required only for approved direct read-only JSON-2 access.",
-      "optional": true,
-      "constraints": {
-        "notEmpty": true
-      },
-      "feel": "optional",
-      "group": "authentication",
-      "binding": {
-        "name": "authentication.database",
-        "type": "zeebe:input"
-      },
-      "type": "String"
-    },
-    {
-      "id": "authentication.apiKey",
-      "label": "JSON-2 API Key",
-      "description": "Required only for approved direct read-only JSON-2 access.",
-      "optional": true,
-      "constraints": {
-        "notEmpty": true
-      },
-      "feel": "optional",
-      "group": "authentication",
-      "binding": {
-        "name": "authentication.apiKey",
-        "type": "zeebe:input"
-      },
-      "type": "String"
-    },
-    {
-      "id": "operation",
-      "label": "Operation",
-      "description": "Bridge commands are authoritative for writes. JSON-2 access is read-only only.",
-      "optional": false,
-      "value": "TRIP_UPSERT",
-      "constraints": {
-        "notEmpty": true
-      },
-      "group": "operation",
-      "binding": {
-        "name": "operation",
-        "type": "zeebe:input"
-      },
-      "type": "Dropdown",
-      "choices": [
+    ],
+    "properties": [
         {
-          "name": "Trip Upsert",
-          "value": "TRIP_UPSERT"
+            "value": "io.camunda:odoo-outbound:1",
+            "binding": {
+                "property": "type",
+                "type": "zeebe:taskDefinition"
+            },
+            "type": "Hidden"
         },
         {
-          "name": "Vendor Offer Upsert",
-          "value": "VENDOR_OFFER_UPSERT"
+            "id": "authentication.url",
+            "label": "Odoo URL",
+            "description": "Base URL of your Odoo 19 instance (e.g., https://mycompany.odoo.com)",
+            "optional": false,
+            "constraints": {
+                "notEmpty": true,
+                "pattern": {
+                    "value": "^https?://.*",
+                    "message": "Must be a valid URL starting with http:// or https://"
+                }
+            },
+            "feel": "optional",
+            "group": "authentication",
+            "binding": {
+                "name": "authentication.url",
+                "type": "zeebe:input"
+            },
+            "type": "String"
         },
         {
-          "name": "Vendor Offer Status",
-          "value": "VENDOR_OFFER_STATUS"
+            "id": "authentication.database",
+            "label": "Database",
+            "description": "Odoo database name (shown in X-Odoo-Database header)",
+            "optional": false,
+            "constraints": {
+                "notEmpty": true
+            },
+            "feel": "optional",
+            "group": "authentication",
+            "binding": {
+                "name": "authentication.database",
+                "type": "zeebe:input"
+            },
+            "type": "String"
         },
         {
-          "name": "Readiness Update",
-          "value": "READINESS_UPDATE"
+            "id": "authentication.apiKey",
+            "label": "API Key",
+            "description": "API key from Odoo user profile (Settings → Users & Companies → API Keys)",
+            "optional": false,
+            "constraints": {
+                "notEmpty": true
+            },
+            "feel": "optional",
+            "group": "authentication",
+            "binding": {
+                "name": "authentication.apiKey",
+                "type": "zeebe:input"
+            },
+            "type": "String"
         },
         {
-          "name": "Trip Final Packet",
-          "value": "TRIP_FINAL_PACKET"
+            "id": "operation",
+            "label": "Operation",
+            "description": "The operation to perform on Odoo",
+            "optional": false,
+            "value": "SEARCH_READ",
+            "constraints": {
+                "notEmpty": true
+            },
+            "group": "operation",
+            "binding": {
+                "name": "operation",
+                "type": "zeebe:input"
+            },
+            "type": "Dropdown",
+            "choices": [
+                {
+                    "name": "Create Record",
+                    "value": "CREATE"
+                },
+                {
+                    "name": "Read Record(s)",
+                    "value": "READ"
+                },
+                {
+                    "name": "Update Record",
+                    "value": "UPDATE"
+                },
+                {
+                    "name": "Delete Record",
+                    "value": "DELETE"
+                },
+                {
+                    "name": "Search Records",
+                    "value": "SEARCH"
+                },
+                {
+                    "name": "Search & Read",
+                    "value": "SEARCH_READ"
+                },
+                {
+                    "name": "Count Records",
+                    "value": "SEARCH_COUNT"
+                },
+                {
+                    "name": "Call Method",
+                    "value": "CALL_METHOD"
+                }
+            ]
         },
         {
-          "name": "Read Record(s)",
-          "value": "READ"
+            "id": "model",
+            "label": "Model",
+            "description": "Odoo model technical name (e.g., res.partner, sale.order, product.product)",
+            "optional": false,
+            "constraints": {
+                "notEmpty": true
+            },
+            "feel": "optional",
+            "group": "operation",
+            "binding": {
+                "name": "model",
+                "type": "zeebe:input"
+            },
+            "type": "String"
         },
         {
-          "name": "Search Records",
-          "value": "SEARCH"
+            "id": "recordId",
+            "label": "Record ID",
+            "description": "ID of a single record to operate on",
+            "optional": true,
+            "feel": "optional",
+            "group": "operation",
+            "binding": {
+                "name": "recordId",
+                "type": "zeebe:input"
+            },
+            "condition": {
+                "property": "operation",
+                "oneOf": [
+                    "READ",
+                    "UPDATE",
+                    "DELETE"
+                ]
+            },
+            "type": "String"
         },
         {
-          "name": "Search & Read",
-          "value": "SEARCH_READ"
+            "id": "recordIds",
+            "label": "Record IDs",
+            "description": "List of record IDs for batch operations (JSON array, e.g., [1, 2, 3])",
+            "optional": true,
+            "feel": "required",
+            "group": "operation",
+            "binding": {
+                "name": "recordIds",
+                "type": "zeebe:input"
+            },
+            "condition": {
+                "property": "operation",
+                "oneOf": [
+                    "READ",
+                    "UPDATE",
+                    "DELETE",
+                    "CALL_METHOD"
+                ]
+            },
+            "type": "Text"
         },
         {
-          "name": "Count Records",
-          "value": "SEARCH_COUNT"
+            "id": "values",
+            "label": "Field Values",
+            "description": "Field values for create/update (JSON object, e.g., {\"name\": \"John\", \"email\": \"john@example.com\"})",
+            "optional": true,
+            "feel": "required",
+            "group": "operation",
+            "binding": {
+                "name": "values",
+                "type": "zeebe:input"
+            },
+            "condition": {
+                "property": "operation",
+                "oneOf": [
+                    "CREATE",
+                    "UPDATE"
+                ]
+            },
+            "type": "Text"
+        },
+        {
+            "id": "fields",
+            "label": "Fields to Read",
+            "description": "Fields to return (JSON array, e.g., [\"name\", \"email\", \"phone\"]). Empty = all fields",
+            "optional": true,
+            "feel": "optional",
+            "group": "operation",
+            "binding": {
+                "name": "fields",
+                "type": "zeebe:input"
+            },
+            "condition": {
+                "property": "operation",
+                "oneOf": [
+                    "READ",
+                    "SEARCH_READ"
+                ]
+            },
+            "type": "Text"
+        },
+        {
+            "id": "domain",
+            "label": "Domain Filter",
+            "description": "Search domain in Odoo format: [[\"field\", \"op\", value], ...]. Ops: =, !=, >, <, like, ilike, in, child_of",
+            "optional": true,
+            "feel": "required",
+            "group": "operation",
+            "binding": {
+                "name": "domain",
+                "type": "zeebe:input"
+            },
+            "condition": {
+                "property": "operation",
+                "oneOf": [
+                    "SEARCH",
+                    "SEARCH_READ",
+                    "SEARCH_COUNT"
+                ]
+            },
+            "type": "Text"
+        },
+        {
+            "id": "limit",
+            "label": "Limit",
+            "description": "Maximum number of records to return",
+            "optional": true,
+            "feel": "optional",
+            "group": "operation",
+            "binding": {
+                "name": "limit",
+                "type": "zeebe:input"
+            },
+            "condition": {
+                "property": "operation",
+                "oneOf": [
+                    "SEARCH",
+                    "SEARCH_READ"
+                ]
+            },
+            "type": "String"
+        },
+        {
+            "id": "offset",
+            "label": "Offset",
+            "description": "Number of records to skip (for pagination)",
+            "optional": true,
+            "feel": "optional",
+            "group": "operation",
+            "binding": {
+                "name": "offset",
+                "type": "zeebe:input"
+            },
+            "condition": {
+                "property": "operation",
+                "oneOf": [
+                    "SEARCH",
+                    "SEARCH_READ"
+                ]
+            },
+            "type": "String"
+        },
+        {
+            "id": "order",
+            "label": "Order By",
+            "description": "Sort order (e.g., \"name ASC, create_date DESC\")",
+            "optional": true,
+            "feel": "optional",
+            "group": "operation",
+            "binding": {
+                "name": "order",
+                "type": "zeebe:input"
+            },
+            "condition": {
+                "property": "operation",
+                "oneOf": [
+                    "SEARCH",
+                    "SEARCH_READ"
+                ]
+            },
+            "type": "String"
+        },
+        {
+            "id": "methodName",
+            "label": "Method Name",
+            "description": "Name of the method to call on the model (check /doc on your Odoo instance)",
+            "optional": true,
+            "feel": "optional",
+            "group": "operation",
+            "binding": {
+                "name": "methodName",
+                "type": "zeebe:input"
+            },
+            "condition": {
+                "property": "operation",
+                "equals": "CALL_METHOD"
+            },
+            "type": "String"
+        },
+        {
+            "id": "methodArgs",
+            "label": "Method Arguments",
+            "description": "Method arguments (JSON object with named parameters)",
+            "optional": true,
+            "feel": "required",
+            "group": "operation",
+            "binding": {
+                "name": "methodArgs",
+                "type": "zeebe:input"
+            },
+            "condition": {
+                "property": "operation",
+                "equals": "CALL_METHOD"
+            },
+            "type": "Text"
+        },
+        {
+            "id": "context",
+            "label": "Context",
+            "description": "Odoo context (JSON object, e.g., {\"lang\": \"en_US\", \"tz\": \"UTC\"})",
+            "optional": true,
+            "feel": "optional",
+            "group": "operation",
+            "binding": {
+                "name": "context",
+                "type": "zeebe:input"
+            },
+            "type": "Text"
+        },
+        {
+            "id": "resultVariable",
+            "label": "Result Variable",
+            "description": "Name of variable to store the response in",
+            "group": "output",
+            "binding": {
+                "key": "resultVariable",
+                "type": "zeebe:taskHeader"
+            },
+            "type": "String"
+        },
+        {
+            "id": "resultExpression",
+            "label": "Result Expression",
+            "description": "Expression to map the response into process variables. Result contains: operation, model, success, createdId, records, searchIds, count, methodResult, error",
+            "feel": "required",
+            "group": "output",
+            "binding": {
+                "key": "resultExpression",
+                "type": "zeebe:taskHeader"
+            },
+            "type": "Text"
+        },
+        {
+            "id": "errorExpression",
+            "label": "Error Expression",
+            "description": "Expression to handle errors. Error codes: ODOO_AUTH_ERROR, ODOO_PERMISSION_ERROR, ODOO_NOT_FOUND, ODOO_VALIDATION_ERROR, ODOO_CONNECTION_ERROR",
+            "feel": "required",
+            "group": "error",
+            "binding": {
+                "key": "errorExpression",
+                "type": "zeebe:taskHeader"
+            },
+            "type": "Text"
+        },
+        {
+            "id": "retryCount",
+            "label": "Retries",
+            "description": "Number of retries (connector also has built-in retry for transient failures)",
+            "value": "3",
+            "feel": "optional",
+            "group": "retries",
+            "binding": {
+                "property": "retries",
+                "type": "zeebe:taskDefinition"
+            },
+            "type": "String"
+        },
+        {
+            "id": "retryBackoff",
+            "label": "Retry Backoff",
+            "description": "ISO-8601 duration to wait between retries",
+            "value": "PT0S",
+            "group": "retries",
+            "binding": {
+                "key": "retryBackoff",
+                "type": "zeebe:taskHeader"
+            },
+            "type": "String"
         }
-      ]
-    },
-    {
-      "id": "payload",
-      "label": "Payload",
-      "description": "Nested payload JSON object for the MAU bridge command.",
-      "optional": true,
-      "feel": "required",
-      "group": "operation",
-      "binding": {
-        "name": "payload",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "TRIP_UPSERT",
-          "VENDOR_OFFER_UPSERT",
-          "VENDOR_OFFER_STATUS",
-          "READINESS_UPDATE",
-          "TRIP_FINAL_PACKET"
-        ]
-      },
-      "type": "Text"
-    },
-    {
-      "id": "external_ref",
-      "label": "External Ref",
-      "description": "Mandatory event-instance reference used by the MAU bridge idempotency key.",
-      "optional": true,
-      "constraints": {
-        "notEmpty": true
-      },
-      "feel": "optional",
-      "group": "correlation",
-      "binding": {
-        "name": "external_ref",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "TRIP_UPSERT",
-          "VENDOR_OFFER_UPSERT",
-          "VENDOR_OFFER_STATUS",
-          "READINESS_UPDATE",
-          "TRIP_FINAL_PACKET"
-        ]
-      },
-      "type": "String"
-    },
-    {
-      "id": "actor_type",
-      "label": "Actor Type",
-      "description": "Canonical actor type. Use `system` for technical writes.",
-      "optional": true,
-      "feel": "optional",
-      "group": "correlation",
-      "binding": {
-        "name": "actor_type",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "TRIP_UPSERT",
-          "VENDOR_OFFER_UPSERT",
-          "VENDOR_OFFER_STATUS",
-          "READINESS_UPDATE",
-          "TRIP_FINAL_PACKET"
-        ]
-      },
-      "type": "String"
-    },
-    {
-      "id": "external_subject",
-      "label": "External Subject",
-      "description": "Canonical identity spine. Required for non-system actors.",
-      "optional": true,
-      "feel": "optional",
-      "group": "correlation",
-      "binding": {
-        "name": "external_subject",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "TRIP_UPSERT",
-          "VENDOR_OFFER_UPSERT",
-          "VENDOR_OFFER_STATUS",
-          "READINESS_UPDATE",
-          "TRIP_FINAL_PACKET"
-        ]
-      },
-      "type": "String"
-    },
-    {
-      "id": "correlation_id",
-      "label": "Correlation ID",
-      "description": "Optional cross-system trace identifier.",
-      "optional": true,
-      "feel": "optional",
-      "group": "correlation",
-      "binding": {
-        "name": "correlation_id",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "TRIP_UPSERT",
-          "VENDOR_OFFER_UPSERT",
-          "VENDOR_OFFER_STATUS",
-          "READINESS_UPDATE",
-          "TRIP_FINAL_PACKET"
-        ]
-      },
-      "type": "String"
-    },
-    {
-      "id": "occurred_at",
-      "label": "Occurred At",
-      "description": "Optional RFC3339 timestamp. Defaults to connector send time when omitted.",
-      "optional": true,
-      "feel": "optional",
-      "group": "correlation",
-      "binding": {
-        "name": "occurred_at",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "TRIP_UPSERT",
-          "VENDOR_OFFER_UPSERT",
-          "VENDOR_OFFER_STATUS",
-          "READINESS_UPDATE",
-          "TRIP_FINAL_PACKET"
-        ]
-      },
-      "type": "String"
-    },
-    {
-      "id": "camunda_business_key",
-      "label": "Camunda Business Key",
-      "description": "Required for trip upsert and recommended anywhere the process is already keyed.",
-      "optional": true,
-      "feel": "optional",
-      "group": "correlation",
-      "binding": {
-        "name": "camunda_business_key",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "TRIP_UPSERT",
-          "VENDOR_OFFER_UPSERT",
-          "VENDOR_OFFER_STATUS",
-          "READINESS_UPDATE",
-          "TRIP_FINAL_PACKET"
-        ]
-      },
-      "type": "String"
-    },
-    {
-      "id": "camunda_process_key",
-      "label": "Camunda Process Key",
-      "description": "Required for `TRIP_UPSERT`.",
-      "optional": true,
-      "feel": "optional",
-      "group": "correlation",
-      "binding": {
-        "name": "camunda_process_key",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "equals": "TRIP_UPSERT"
-      },
-      "type": "String"
-    },
-    {
-      "id": "camunda_process_instance_key",
-      "label": "Camunda Process Instance Key",
-      "description": "Required for `TRIP_UPSERT` and recommended when the process instance already exists.",
-      "optional": true,
-      "feel": "optional",
-      "group": "correlation",
-      "binding": {
-        "name": "camunda_process_instance_key",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "TRIP_UPSERT",
-          "VENDOR_OFFER_UPSERT",
-          "VENDOR_OFFER_STATUS",
-          "READINESS_UPDATE",
-          "TRIP_FINAL_PACKET"
-        ]
-      },
-      "type": "String"
-    },
-    {
-      "id": "reference_code",
-      "label": "Reference Code",
-      "description": "Canonical Odoo-issued trip reference code when known or required.",
-      "optional": true,
-      "feel": "optional",
-      "group": "correlation",
-      "binding": {
-        "name": "reference_code",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "TRIP_UPSERT",
-          "VENDOR_OFFER_UPSERT",
-          "VENDOR_OFFER_STATUS",
-          "READINESS_UPDATE",
-          "TRIP_FINAL_PACKET"
-        ]
-      },
-      "type": "String"
-    },
-    {
-      "id": "component_external_ref",
-      "label": "Component External Ref",
-      "description": "Required for vendor offer operations.",
-      "optional": true,
-      "feel": "optional",
-      "group": "correlation",
-      "binding": {
-        "name": "component_external_ref",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "VENDOR_OFFER_UPSERT",
-          "VENDOR_OFFER_STATUS"
-        ]
-      },
-      "type": "String"
-    },
-    {
-      "id": "external_offer_ref",
-      "label": "External Offer Ref",
-      "description": "Required for vendor offer operations.",
-      "optional": true,
-      "feel": "optional",
-      "group": "correlation",
-      "binding": {
-        "name": "external_offer_ref",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "VENDOR_OFFER_UPSERT",
-          "VENDOR_OFFER_STATUS"
-        ]
-      },
-      "type": "String"
-    },
-    {
-      "id": "model",
-      "label": "Model",
-      "description": "Model name for approved direct read-only JSON-2 access.",
-      "optional": true,
-      "feel": "optional",
-      "group": "directRead",
-      "binding": {
-        "name": "model",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "READ",
-          "SEARCH",
-          "SEARCH_READ",
-          "SEARCH_COUNT"
-        ]
-      },
-      "type": "String"
-    },
-    {
-      "id": "recordId",
-      "label": "Record ID",
-      "description": "Single record ID for `READ`.",
-      "optional": true,
-      "feel": "optional",
-      "group": "directRead",
-      "binding": {
-        "name": "recordId",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "equals": "READ"
-      },
-      "type": "String"
-    },
-    {
-      "id": "recordIds",
-      "label": "Record IDs",
-      "description": "JSON array of record IDs for `READ`.",
-      "optional": true,
-      "feel": "required",
-      "group": "directRead",
-      "binding": {
-        "name": "recordIds",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "equals": "READ"
-      },
-      "type": "Text"
-    },
-    {
-      "id": "fields",
-      "label": "Fields",
-      "description": "Optional JSON array of fields for read/search-read operations.",
-      "optional": true,
-      "feel": "required",
-      "group": "directRead",
-      "binding": {
-        "name": "fields",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "READ",
-          "SEARCH_READ"
-        ]
-      },
-      "type": "Text"
-    },
-    {
-      "id": "domain",
-      "label": "Domain",
-      "description": "Optional JSON array domain for search operations.",
-      "optional": true,
-      "feel": "required",
-      "group": "directRead",
-      "binding": {
-        "name": "domain",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "SEARCH",
-          "SEARCH_READ",
-          "SEARCH_COUNT"
-        ]
-      },
-      "type": "Text"
-    },
-    {
-      "id": "limit",
-      "label": "Limit",
-      "description": "Optional maximum number of records for search operations.",
-      "optional": true,
-      "feel": "optional",
-      "group": "directRead",
-      "binding": {
-        "name": "limit",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "SEARCH",
-          "SEARCH_READ"
-        ]
-      },
-      "type": "String"
-    },
-    {
-      "id": "offset",
-      "label": "Offset",
-      "description": "Optional offset for search operations.",
-      "optional": true,
-      "feel": "optional",
-      "group": "directRead",
-      "binding": {
-        "name": "offset",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "SEARCH",
-          "SEARCH_READ"
-        ]
-      },
-      "type": "String"
-    },
-    {
-      "id": "order",
-      "label": "Order",
-      "description": "Optional sort expression for search operations.",
-      "optional": true,
-      "feel": "optional",
-      "group": "directRead",
-      "binding": {
-        "name": "order",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "SEARCH",
-          "SEARCH_READ"
-        ]
-      },
-      "type": "String"
-    },
-    {
-      "id": "direct_access_purpose",
-      "label": "Direct Access Purpose",
-      "description": "Required justification for approved direct read-only JSON-2 access.",
-      "optional": true,
-      "constraints": {
-        "notEmpty": true
-      },
-      "feel": "optional",
-      "group": "directRead",
-      "binding": {
-        "name": "direct_access_purpose",
-        "type": "zeebe:input"
-      },
-      "condition": {
-        "property": "operation",
-        "oneOf": [
-          "READ",
-          "SEARCH",
-          "SEARCH_READ",
-          "SEARCH_COUNT"
-        ]
-      },
-      "type": "String"
-    },
-    {
-      "id": "resultVariable",
-      "label": "Result Variable",
-      "description": "Name of the variable that should store the normalized connector result.",
-      "group": "output",
-      "binding": {
-        "key": "resultVariable",
-        "type": "zeebe:taskHeader"
-      },
-      "type": "String"
-    },
-    {
-      "id": "resultExpression",
-      "label": "Result Expression",
-      "description": "Optional expression to map the normalized result object into process variables.",
-      "feel": "required",
-      "group": "output",
-      "binding": {
-        "key": "resultExpression",
-        "type": "zeebe:taskHeader"
-      },
-      "type": "Text"
-    },
-    {
-      "id": "errorExpression",
-      "label": "Error Expression",
-      "description": "Optional expression to map normalized MAU error classes into process variables or incidents.",
-      "feel": "required",
-      "group": "error",
-      "binding": {
-        "key": "errorExpression",
-        "type": "zeebe:taskHeader"
-      },
-      "type": "Text"
-    },
-    {
-      "id": "retryCount",
-      "label": "Retries",
-      "description": "Process-level retries. Keep aligned to MAU retry policy and avoid blind retries for terminal classes.",
-      "value": "3",
-      "feel": "optional",
-      "group": "retries",
-      "binding": {
-        "property": "retries",
-        "type": "zeebe:taskDefinition"
-      },
-      "type": "String"
-    },
-    {
-      "id": "retryBackoff",
-      "label": "Retry Backoff",
-      "description": "ISO-8601 duration between retries.",
-      "value": "PT0S",
-      "group": "retries",
-      "binding": {
-        "key": "retryBackoff",
-        "type": "zeebe:taskHeader"
-      },
-      "type": "String"
+    ],
+    "icon": {
+        "contents": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiB3aWR0aD0iMTgiIGhlaWdodD0iMTgiPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJvZG9vR3JhZGllbnQiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjojNzE0QjY3O3N0b3Atb3BhY2l0eToxIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiM4NzVBN0I7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0NSIgZmlsbD0idXJsKCNvZG9vR3JhZGllbnQpIi8+CiAgPHBhdGggZD0iTTMwIDUwIEMzMCAzOCAzOCAzMCA1MCAzMCBDNjIgMzAgNzAgMzggNzAgNTAgQzcwIDYyIDYyIDcwIDUwIDcwIEMzOCA3MCAzMCA2MiAzMCA1MCBaIE00MCA1MCBDNDAgNTYgNDQgNjAgNTAgNjAgQzU2IDYwIDYwIDU2IDYwIDUwIEM2MCA0NCA1NiA0MCA1MCA0MCBDNDQgNDAgNDAgNDQgNDAgNTAgWiIgZmlsbD0id2hpdGUiLz4KICA8Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI4IiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4="
     }
-  ]
 }

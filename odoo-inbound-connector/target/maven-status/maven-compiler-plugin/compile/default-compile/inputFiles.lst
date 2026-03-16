@@ -1,9 +1,8 @@
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\MauOdooEventEnvelope.java
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooInboundExecutable.java
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooPollingEvent.java
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooInboundEvent.java
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooPollingExecutable.java
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooPollingClient.java
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooPollingProperties.java
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooInboundConnectorAutoConfiguration.java
-D:\Dev\mau_tourism_ALL\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooWebhookProperties.java
+C:\Users\Yassin Hendawy\OneDrive\Business\Tehuti Projects\Operations\Tehuti TEMPLE\Camunda SELF HOSTED\Connectors\Odoo Connectors\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooPollingClient.java
+C:\Users\Yassin Hendawy\OneDrive\Business\Tehuti Projects\Operations\Tehuti TEMPLE\Camunda SELF HOSTED\Connectors\Odoo Connectors\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooInboundConnectorAutoConfiguration.java
+C:\Users\Yassin Hendawy\OneDrive\Business\Tehuti Projects\Operations\Tehuti TEMPLE\Camunda SELF HOSTED\Connectors\Odoo Connectors\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooPollingProperties.java
+C:\Users\Yassin Hendawy\OneDrive\Business\Tehuti Projects\Operations\Tehuti TEMPLE\Camunda SELF HOSTED\Connectors\Odoo Connectors\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooWebhookProperties.java
+C:\Users\Yassin Hendawy\OneDrive\Business\Tehuti Projects\Operations\Tehuti TEMPLE\Camunda SELF HOSTED\Connectors\Odoo Connectors\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooPollingEvent.java
+C:\Users\Yassin Hendawy\OneDrive\Business\Tehuti Projects\Operations\Tehuti TEMPLE\Camunda SELF HOSTED\Connectors\Odoo Connectors\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooInboundEvent.java
+C:\Users\Yassin Hendawy\OneDrive\Business\Tehuti Projects\Operations\Tehuti TEMPLE\Camunda SELF HOSTED\Connectors\Odoo Connectors\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooInboundExecutable.java
+C:\Users\Yassin Hendawy\OneDrive\Business\Tehuti Projects\Operations\Tehuti TEMPLE\Camunda SELF HOSTED\Connectors\Odoo Connectors\Odoo-19-Camunda-8-Connector\odoo-inbound-connector\src\main\java\io\camunda\connector\odoo\inbound\OdooPollingExecutable.java
